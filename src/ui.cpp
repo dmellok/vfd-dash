@@ -104,6 +104,7 @@ enum PageId {
     PAGE_CLAUDE,
     PAGE_PORTAL,
     PAGE_PRUSA,
+    PAGE_WATCH,
     PAGE_COUNT
 };
 
@@ -179,6 +180,14 @@ uint8_t uiPageIndex()  { return s_page; }
 uint8_t uiFontIndex()  { return s_font; }
 uint8_t uiVizIndex()   { return s_viz;  }
 uint8_t uiClockIndex() { return s_clk;  }
+
+const char* uiPageName(uint8_t idx) {
+    static const char* kNames[] = {
+        "OVERVIEW", "TIME", "WEATHER", "NOW PLAYING", "MATRIX",
+        "CATS", "TAMAGOTCHI", "CLAUDE", "PORTAL", "PRUSA", "WATCH",
+    };
+    return idx < (sizeof(kNames) / sizeof(kNames[0])) ? kNames[idx] : "?";
+}
 
 void uiNextPage()  { s_page = (s_page + 1) % PAGE_COUNT; s_pageChangedAt = millis(); }
 void uiPrevPage()  { s_page = (s_page + PAGE_COUNT - 1) % PAGE_COUNT; s_pageChangedAt = millis(); }
@@ -1443,18 +1452,131 @@ static void renderClaudeUsage(VFD& v) {
     time_t now = time(nullptr);
     if (now < 1700000000) now = 0;     // not yet NTP-synced
 
-    drawUsageRow(v, 13, "5H",  u.fiveHourPct,       u.fiveHourResetUtc, now);
-    drawUsageRow(v, 22, "7D",  u.sevenDayPct,       u.sevenDayResetUtc, now);
-    drawUsageRow(v, 31, "SON", u.sevenDaySonnetPct, u.sevenDayResetUtc, now);
+    drawUsageRow(v, 14, "5H", u.fiveHourPct, u.fiveHourResetUtc, now);
+    drawUsageRow(v, 23, "7D", u.sevenDayPct, u.sevenDayResetUtc, now);
 
-    // Footer: extra-usage flag + age of last update.
-    v.setFont(u8g2_font_4x6_tf);
-    char foot[40];
-    long ageS = (long)((millis() - u.updatedAt) / 1000);
-    snprintf(foot, sizeof(foot), "extra: %s   updated %lds ago",
-             u.extraEnabled ? "ON" : "off", ageS);
-    int fw = v.getStrWidth(foot);
-    v.drawStr((256 - fw) / 2, 47, foot);
+    // Stats strip: HRule + three labelled cells separated by VLines. Each
+    // cell is a small label above a larger value, matching the cats-page
+    // styling for a dashboard feel.
+    v.drawHLine(2, 32, 252);
+    v.drawVLine(84,  33, 16);
+    v.drawVLine(170, 33, 16);
+
+    auto drawCell = [&](int xL, int xR, const char* label, const char* value) {
+        v.setFont(u8g2_font_4x6_tf);
+        int lw = v.getStrWidth(label);
+        v.drawStr(xL + (xR - xL - lw) / 2, 39, label);
+        v.setFont(u8g2_font_5x7_tf);
+        int vw = v.getStrWidth(value);
+        v.drawStr(xL + (xR - xL - vw) / 2, 48, value);
+    };
+
+    char sonV[12], extV[8], paceV[12];
+    snprintf(sonV, sizeof(sonV), "%d%%", u.sevenDaySonnetPct);
+    strncpy(extV, u.extraEnabled ? "ON" : "off", sizeof(extV));
+    extV[sizeof(extV) - 1] = 0;
+    if (now > 0 && u.fiveHourResetUtc > 0) {
+        time_t fiveHourStart = u.fiveHourResetUtc - 5 * 3600;
+        long   elapsedS      = (long)(now - fiveHourStart);
+        if (elapsedS < 1) elapsedS = 1;
+        float ratePerHr = (u.fiveHourPct * 3600.0f) / elapsedS;
+        snprintf(paceV, sizeof(paceV), "%.0f%%/h", ratePerHr);
+    } else {
+        strcpy(paceV, "--");
+    }
+
+    drawCell(2,   84,  "SONNET",  sonV);
+    drawCell(86,  170, "EXTRA",   extV);
+    drawCell(172, 253, "5H PACE", paceV);
+}
+
+// ----- Watch page (time on the left, Claude usage on the right) -----------
+//  Big HH:MM clock + date down the left half. Three compact usage bars
+//  (5H / 7D / SON) plus a countdown to the next reset down the right half.
+// ============================================================================
+static void renderWatch(VFD& v) {
+    const ClaudeUsage& u = getClaudeUsage();
+    struct tm lt;
+    bool haveTime = getLocalTimeNow(lt);
+
+    v.drawFrame(0, 0, 256, 50);
+    v.drawVLine(128, 1, 48);                       // split between halves
+
+    // === LEFT: time =====================================================
+    {
+        char tb[8];
+        if (haveTime) formatTime(tb, sizeof(tb), lt, false);
+        else          strcpy(tb, "--:--");
+        v.setFont(u8g2_font_logisoso22_tn);
+        int tw = v.getStrWidth(tb);
+        v.drawStr((128 - tw) / 2, 28, tb);
+
+        v.setFont(u8g2_font_5x7_tf);
+        if (haveTime) {
+            char db[24]; formatDate(db, sizeof(db), lt);
+            int dw = v.getStrWidth(db);
+            v.drawStr((128 - dw) / 2, 43, db);
+        } else {
+            const char* msg = "waiting for NTP";
+            int mw = v.getStrWidth(msg);
+            v.drawStr((128 - mw) / 2, 43, msg);
+        }
+    }
+
+    // === RIGHT: Claude usage ============================================
+    const int rxL = 131, rxR = 253;
+    v.setFont(u8g2_font_5x7_tf);
+    const char* title = "CLAUDE";
+    int tlw = v.getStrWidth(title);
+    v.drawStr(rxL + (rxR - rxL - tlw) / 2, 8, title);
+    v.drawHLine(rxL - 1, 10, rxR - rxL + 2);
+
+    if (!u.valid) {
+        const char* msg = "no data";
+        int mw = v.getStrWidth(msg);
+        v.drawStr(rxL + (rxR - rxL - mw) / 2, 28, msg);
+        return;
+    }
+
+    auto compactRow = [&](int y, const char* label, int pct) {
+        if (pct < 0)   pct = 0;
+        if (pct > 100) pct = 100;
+        v.drawStr(rxL, y + 6, label);
+        const int kBarX = rxL + 20;
+        const int kBarW = 70;
+        const int kBarH = 5;
+        v.drawFrame(kBarX, y + 1, kBarW, kBarH);
+        int fillW = ((kBarW - 2) * pct) / 100;
+        if (fillW > 0) v.drawBox(kBarX + 1, y + 2, fillW, kBarH - 2);
+        char p[8]; snprintf(p, sizeof(p), "%d%%", pct);
+        int pw = v.getStrWidth(p);
+        v.drawStr(rxR - pw, y + 6, p);
+    };
+
+    compactRow(13, "5H", u.fiveHourPct);
+    compactRow(22, "7D", u.sevenDayPct);
+
+    // Subtle separator before the footer stats.
+    v.drawHLine(rxL - 1, 32, rxR - rxL + 2);
+
+    // Two clean lines below the rule: Sonnet + extra flag, then countdown.
+    v.setFont(u8g2_font_5x7_tf);
+    char stats[24];
+    snprintf(stats, sizeof(stats), "SON %d%%  EXTRA %s",
+             u.sevenDaySonnetPct, u.extraEnabled ? "ON" : "off");
+    int xw = v.getStrWidth(stats);
+    v.drawStr(rxL + (rxR - rxL - xw) / 2, 40, stats);
+
+    time_t now = time(nullptr);
+    if (now > 1700000000 && u.fiveHourResetUtc > 0) {
+        char r[16];
+        formatCountdown(r, sizeof(r), (long)(u.fiveHourResetUtc - now));
+        char foot[24];
+        snprintf(foot, sizeof(foot), "5H resets in %s", r);
+        v.setFont(u8g2_font_4x6_tf);
+        int fw = v.getStrWidth(foot);
+        v.drawStr(rxL + (rxR - rxL - fw) / 2, 48, foot);
+    }
 }
 
 // ----- Portal / Aperture page --------------------------------------------
@@ -2859,7 +2981,7 @@ static void maybeDrawToast(VFD& v) {
     const char* label = nullptr;
     char buf[32];
     if (s_pageChangedAt && ageP < 900) {
-        static const char* names[] = {"OVERVIEW", "TIME", "WEATHER", "NOW PLAYING", "MATRIX", "CATS", "TAMAGOTCHI", "CLAUDE", "PORTAL", "PRUSA"};
+        static const char* names[] = {"OVERVIEW", "TIME", "WEATHER", "NOW PLAYING", "MATRIX", "CATS", "TAMAGOTCHI", "CLAUDE", "PORTAL", "PRUSA", "WATCH"};
         snprintf(buf, sizeof(buf), "> %s", names[s_page]);
         label = buf;
     } else if (s_fontChangedAt && ageF < 900) {
@@ -2965,6 +3087,7 @@ void uiRender(VFD& v) {
         case PAGE_CLAUDE:       renderClaudeUsage(v);      break;
         case PAGE_PORTAL:       renderPortal(v);           break;
         case PAGE_PRUSA:        renderPrusa(v);            break;
+        case PAGE_WATCH:        renderWatch(v);            break;
     }
     maybeDrawToast(v);
     v.sendBuffer();

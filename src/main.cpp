@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
+#include <WiFi.h>
 
 #include "vfd.h"
 #include "net.h"
@@ -15,9 +17,61 @@ static bool     s_matrixBright = false;
 static uint32_t s_matrixBrightUntil = 0;
 static const uint32_t kMatrixBrightTimeoutMs = 15000;
 
+// Display power. Driven by `display on/off/toggle` commands (typically from
+// a presence sensor via HA). Off forces contrast to 0 while preserving the
+// stored brightness so toggling back on returns to the same level.
+static bool s_displayOn = true;
+
+static void publishState(const char* why);   // forward decl
+
 static void applyBrightness(uint8_t b) {
     s_brightness = b;
-    vfd.setContrast(b);
+    vfd.setContrast(s_displayOn ? b : 0);
+}
+
+static void setDisplayOn(bool on) {
+    if (s_displayOn == on) return;
+    s_displayOn = on;
+    vfd.setContrast(on ? s_brightness : 0);
+    Serial.printf("[cmd] display %s\n", on ? "on" : "off");
+    publishState(on ? "display on" : "display off");
+}
+
+// Simple linear lux → brightness curve. 0 lux floors at kMinB (still
+// readable in a dark room), kCap+ lux saturates at kMaxB. HA can either
+// publish raw lux via "lux N" and use this curve, or compute its own
+// curve and publish a final brightness via "bright N".
+static uint8_t luxToBrightness(int lux) {
+    constexpr int kMinB = 24;
+    constexpr int kMaxB = 255;
+    constexpr int kCap  = 800;
+    if (lux < 0)    lux = 0;
+    if (lux > kCap) lux = kCap;
+    int b = kMinB + (lux * (kMaxB - kMinB)) / kCap;
+    if (b < 0) b = 0;
+    if (b > 255) b = 255;
+    return (uint8_t)b;
+}
+
+static void publishState(const char* why) {
+    if (!mqttConnected()) return;
+    JsonDocument doc;
+    doc["display"]      = s_displayOn ? "on" : "off";
+    doc["brightness"]   = s_brightness;
+    doc["page"]         = uiPageIndex();
+    doc["page_name"]    = uiPageName(uiPageIndex());
+    doc["font"]         = uiFontIndex();
+    doc["viz"]          = uiVizIndex();
+    doc["clock_face"]   = uiClockIndex();
+    doc["clock_font"]   = uiClockFontIndex();
+    doc["use_12h"]      = uiIs12h();
+    doc["dash_glitch"]  = uiIsDashGlitch();
+    doc["ip"]           = netLocalIp();
+    doc["uptime_s"]     = (uint32_t)(millis() / 1000);
+    doc["reason"]       = why ? why : "";
+    char buf[320];
+    serializeJson(doc, buf, sizeof(buf));
+    netPublishState(buf);
 }
 
 static void persistAll(const char* why) {
@@ -30,6 +84,7 @@ static void persistAll(const char* why) {
     Serial.printf("[cmd] %s -> page=%u font=%u viz=%u clk=%u bright=%u 12h=%u cfont=%u glitch=%u\n",
                   why, s.page, s.font, s.viz, s.clk, s.brightness, s.use12h,
                   s.clockFont, s.dashGlitch);
+    publishState(why);
 }
 
 static void onCommand(const String& raw) {
@@ -64,6 +119,29 @@ static void onCommand(const String& raw) {
         bool ok = uiTriggerCatAction(name.c_str());
         Serial.printf("[cmd] cat %s -> %s\n",
                       name.c_str(), ok ? "ok" : "unknown action");
+        return;
+    }
+
+    // Display power: "display on" / "display off" / "display" (toggle).
+    // Typically driven by a presence sensor via Home Assistant.
+    if (c.startsWith("display")) {
+        String arg = c.substring(7); arg.trim();
+        bool target = s_displayOn;
+        if      (arg == "on"  || arg == "1" || arg == "true")  target = true;
+        else if (arg == "off" || arg == "0" || arg == "false") target = false;
+        else if (arg == ""    || arg == "toggle")              target = !target;
+        else { Serial.println("[cmd] display ?"); return; }
+        setDisplayOn(target);
+        return;
+    }
+
+    // Raw ambient lux from a light sensor. Mapped through the built-in
+    // curve to brightness; not persisted (changes constantly).
+    if (c.startsWith("lux ")) {
+        long v = c.substring(4).toInt();
+        if (v < 0) v = 0;
+        applyBrightness(luxToBrightness((int)v));
+        Serial.printf("[cmd] lux %ld -> brightness %u\n", v, s_brightness);
         return;
     }
 
@@ -218,6 +296,17 @@ void loop() {
             lastOcto = millis();
         }
     }
+
+    // State heartbeat — republish the retained state every 30 s so HA has
+    // a fresh snapshot, plus an immediate publish on first MQTT connect.
+    static uint32_t lastState = 0;
+    static bool wasMqttUp     = false;
+    bool mqttUp = mqttConnected();
+    if ((mqttUp && !wasMqttUp) || (mqttUp && millis() - lastState > 30000UL)) {
+        publishState(wasMqttUp ? "heartbeat" : "boot");
+        lastState = millis();
+    }
+    wasMqttUp = mqttUp;
 
     // Render at ~20 fps.
     static uint32_t lastDraw = 0;

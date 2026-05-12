@@ -19,6 +19,7 @@ uint8_t uiFontIndex();
 uint8_t uiVizIndex();
 uint8_t uiClockIndex();
 uint8_t uiClockFontIndex();
+const char* uiPageName(uint8_t idx);     // "OVERVIEW", "TIME", …
 
 void uiSet12h(bool on);
 void uiSetClockFont(uint8_t idx);

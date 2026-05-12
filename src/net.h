@@ -31,6 +31,11 @@ void mqttBegin(CommandHandler handler);
 void mqttLoop();
 bool mqttConnected();
 
+// Publish a retained JSON state snapshot to the device's state topic. Used
+// by main.cpp on settings changes and on a periodic heartbeat so HA always
+// has an up-to-date view of the device.
+void netPublishState(const char* json);
+
 // ---- Now-playing (from MQTT) ------------------------------------------
 const Song& getNowPlaying();
 

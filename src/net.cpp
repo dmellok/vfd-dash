@@ -24,6 +24,8 @@ static const char* TOPIC_PLAYING = "straybot/playing";
 static const char* TOPIC_INPUT   = "vfd/input";
 static const char* TOPIC_CLAUDE  = "claude/usage";
 static const char* TOPIC_KNOB    = "keyboard/knob";
+static const char* TOPIC_STATE   = "vfd/state";
+static const char* TOPIC_AVAIL   = "vfd/availability";
 
 // OTA — must match upload_flags --auth=... in platformio.ini.
 static const char* OTA_HOSTNAME = "vfd-dashboard";
@@ -248,12 +250,21 @@ static void mqttTryConnect() {
     if (!netConnected()) return;
     if (millis() - s_lastMqttAttempt < 5000) return;
     s_lastMqttAttempt = millis();
-    if (mqtt.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS)) {
+    // LWT publishes "offline" to the availability topic if the broker loses
+    // contact with the device, so HA can mark it unavailable automatically.
+    if (mqtt.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS,
+                     TOPIC_AVAIL, 0, true, "offline")) {
+        mqtt.publish(TOPIC_AVAIL, "online", true);
         mqtt.subscribe(TOPIC_PLAYING);
         mqtt.subscribe(TOPIC_INPUT);
         mqtt.subscribe(TOPIC_CLAUDE);
         mqtt.subscribe(TOPIC_KNOB);
     }
+}
+
+void netPublishState(const char* json) {
+    if (!mqtt.connected()) return;
+    mqtt.publish(TOPIC_STATE, json, /*retain=*/true);
 }
 
 void mqttLoop() {
