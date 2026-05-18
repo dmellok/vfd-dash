@@ -6,6 +6,7 @@
 void uiBegin(uint8_t page, uint8_t font, uint8_t viz, uint8_t clk);
 void uiNextPage();
 void uiPrevPage();
+void uiSetPage(uint8_t idx);
 void uiNextFont();
 void uiPrevFont();
 void uiNextViz();

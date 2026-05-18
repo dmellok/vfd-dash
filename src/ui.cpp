@@ -191,6 +191,11 @@ const char* uiPageName(uint8_t idx) {
 
 void uiNextPage()  { s_page = (s_page + 1) % PAGE_COUNT; s_pageChangedAt = millis(); }
 void uiPrevPage()  { s_page = (s_page + PAGE_COUNT - 1) % PAGE_COUNT; s_pageChangedAt = millis(); }
+void uiSetPage(uint8_t idx) {
+    if (idx >= PAGE_COUNT) idx = 0;
+    s_page = idx;
+    s_pageChangedAt = millis();
+}
 void uiNextFont()  { s_font = (s_font + 1) % kFontCount; s_fontChangedAt = millis(); }
 void uiPrevFont()  { s_font = (s_font + kFontCount - 1) % kFontCount; s_fontChangedAt = millis(); }
 void uiNextViz()   { s_viz  = (s_viz  + 1) % VIZ_COUNT;  s_vizChangedAt  = millis(); }
@@ -1455,12 +1460,13 @@ static void renderClaudeUsage(VFD& v) {
     drawUsageRow(v, 14, "5H", u.fiveHourPct, u.fiveHourResetUtc, now);
     drawUsageRow(v, 23, "7D", u.sevenDayPct, u.sevenDayResetUtc, now);
 
-    // Stats strip: HRule + three labelled cells separated by VLines. Each
+    // Stats strip: HRule + four labelled cells separated by VLines. Each
     // cell is a small label above a larger value, matching the cats-page
     // styling for a dashboard feel.
     v.drawHLine(2, 32, 252);
-    v.drawVLine(84,  33, 16);
-    v.drawVLine(170, 33, 16);
+    v.drawVLine(64,  33, 16);
+    v.drawVLine(128, 33, 16);
+    v.drawVLine(192, 33, 16);
 
     auto drawCell = [&](int xL, int xR, const char* label, const char* value) {
         v.setFont(u8g2_font_4x6_tf);
@@ -1471,7 +1477,7 @@ static void renderClaudeUsage(VFD& v) {
         v.drawStr(xL + (xR - xL - vw) / 2, 48, value);
     };
 
-    char sonV[12], extV[8], paceV[12];
+    char sonV[12], extV[8], paceV[12], ageV[12];
     snprintf(sonV, sizeof(sonV), "%d%%", u.sevenDaySonnetPct);
     strncpy(extV, u.extraEnabled ? "ON" : "off", sizeof(extV));
     extV[sizeof(extV) - 1] = 0;
@@ -1484,10 +1490,17 @@ static void renderClaudeUsage(VFD& v) {
     } else {
         strcpy(paceV, "--");
     }
+    if (u.updatedAt > 0) {
+        long ageS = (long)((millis() - u.updatedAt) / 1000);
+        formatCountdown(ageV, sizeof(ageV), ageS);
+    } else {
+        strcpy(ageV, "--");
+    }
 
-    drawCell(2,   84,  "SONNET",  sonV);
-    drawCell(86,  170, "EXTRA",   extV);
-    drawCell(172, 253, "5H PACE", paceV);
+    drawCell(2,   63,  "SONNET",  sonV);
+    drawCell(65,  127, "EXTRA",   extV);
+    drawCell(129, 191, "5H PACE", paceV);
+    drawCell(193, 253, "UPDATED", ageV);
 }
 
 // ----- Watch page (time on the left, Claude usage on the right) -----------
@@ -1554,7 +1567,7 @@ static void renderWatch(VFD& v) {
     };
 
     compactRow(13, "5H", u.fiveHourPct);
-    compactRow(22, "7D", u.sevenDayPct);
+    compactRow(23, "7D", u.sevenDayPct);
 
     // Subtle separator before the footer stats.
     v.drawHLine(rxL - 1, 32, rxR - rxL + 2);

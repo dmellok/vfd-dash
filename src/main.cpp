@@ -6,6 +6,7 @@
 #include "net.h"
 #include "ui.h"
 #include "settings.h"
+#include "http.h"
 
 static VFD vfd;
 static uint8_t s_brightness = 128;
@@ -135,6 +136,15 @@ static void onCommand(const String& raw) {
         return;
     }
 
+    // Jump directly to a specific page by index, e.g. "page 7".
+    if (c.startsWith("page ")) {
+        long v = c.substring(5).toInt();
+        if (v < 0) v = 0;
+        uiSetPage((uint8_t)v);
+        persistAll(c.c_str());
+        return;
+    }
+
     // Raw ambient lux from a light sensor. Mapped through the built-in
     // curve to brightness; not persisted (changes constantly).
     if (c.startsWith("lux ")) {
@@ -247,6 +257,7 @@ void setup() {
 
     uiBoot(vfd, "Connecting WiFi...");
     netBegin();
+    httpBegin(vfd);
 
     uiBoot(vfd, "Syncing time...");
     timeBegin();
@@ -264,6 +275,7 @@ void setup() {
 void loop() {
     netLoop();
     mqttLoop();
+    httpLoop();
     pumpSerial();
 
     // Drop matrix brightness mode on idle timeout or if user navigated away.
