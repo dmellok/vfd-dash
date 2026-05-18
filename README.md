@@ -1,8 +1,29 @@
-# VFD Template — Pico W + GP1287BI
+# VFD Desk HUD
 
-Minimal known-working starter for the EEI **EPC-INBN0BV1287UD** carrier (GP1287BI 256×50 VFD) driven from a **Raspberry Pi Pico W**. Flashing this template should print "Hello, world!" on the display with no other setup required.
+![VFD desk dashboard showing the overview page](https://dmello.io/content/images/size/w2000/2026/05/IMG_4594.jpeg)
 
-## Wiring
+A desk dashboard built around a 256×50 GP1287BI VFD panel driven by a Raspberry Pi Pico W. It cycles through eleven pages of live info — clock, weather, now-playing with visualizers, OctoPrint print progress, Claude API usage, cat-scale telemetry, and a Portal/Aperture easter egg — pulled from MQTT and a handful of REST endpoints.
+
+Full writeup with photos: **[Building a VFD Desk HUD](https://dmello.io/building-a-vfd-desk-hud-with-a-pi-pico-w/)**.
+
+## Features
+
+- **11 pages**: Overview, Time, Weather, Now Playing, Matrix Rain, Cats, Tamagotchi, Claude Usage, Portal, Prusa, Watch (time + compact Claude readout)
+- ~20 fps render loop with independent network/MQTT refresh
+- **OTA firmware updates** with a terminal-style `> FLASHING` splash rendered directly from the OTA callbacks
+- **Home Assistant integration** — `display on/off` from a presence sensor and `lux N` from an ambient-light sensor (mapped through a built-in brightness curve)
+- **Two-way MQTT state**: device publishes its current state (page, brightness, display on/off, Claude data, uptime, IP, …) as retained JSON on `vfd/state`, plus an `online` / `offline` availability topic via MQTT LWT
+- **LittleFS-cached state** for cats, Claude usage, and last-print timestamp so reboots show known values instantly — no "waiting for…" beat
+- Knob input via MQTT (`keyboard/knob`) with context-sensitive press behaviour per page
+- Configurable fonts, clock animations, music visualizers, and a "dash glitch" toggle for fun
+
+![Dashboard cycling through different pages](https://dmello.io/content/images/2026/05/IMG_4610.jpeg)
+
+## Hardware
+
+EEI **EPC-INBN0BV1287UD** carrier (GP1287BI 256×50 VFD) driven from a **Raspberry Pi Pico W** via software SPI.
+
+### Wiring
 
 | Carrier (CN7) | Pico W | Notes                                      |
 | ------------- | ------ | ------------------------------------------ |
@@ -13,40 +34,71 @@ Minimal known-working starter for the EEI **EPC-INBN0BV1287UD** carrier (GP1287B
 | RESET         | GP6    | Active-LOW                                 |
 | GND           | GND    | **Must** be bonded for signals to work     |
 
-**Power the carrier separately**: USB-C or DC005 at 4.5–20 V, ≥ 2 A. The VFD can draw ~1.5 A at full brightness — far more than the Pico can source. Optionally feed the Pico's `VBUS` from the carrier's `+5V OUT` (CN6 pin 8) so one wall-wart powers both.
+Power the carrier separately via USB-C or DC005 at 4.5–20 V, ≥ 2 A — the VFD can draw ~1.5 A at full brightness. Optionally feed the Pico's `VBUS` from the carrier's `+5V OUT` (CN6 pin 8) so one supply powers both.
 
-Warning: the carrier's on-board boost converter generates VHG = 60 V and VHP = 90 V to drive the VFD anode. Don't poke exposed pins while powered.
+> **Warning:** the carrier's on-board boost converter generates VHG = 60 V and VHP = 90 V to drive the VFD anode. Don't poke exposed pins while powered.
 
-## Why this isn't a one-line u8g2 constructor
+## Software
 
-Three hardware/library gotchas combined:
+PlatformIO + arduino-pico (Earle Philhower core), u8g2 for rendering, ArduinoJson for parsing, PubSubClient for MQTT.
 
-1. **GP1287BI is not in upstream u8g2.** The custom fork in `lib/U8g2` adds a `GP1287AI` driver; the AI and BI share a command set, so the AI driver works for the BI.
-2. **LSB-first 8-bit SPI.** The datasheet specifies "DATA: SPI data input, LSB First." u8g2's stock *software* SPI byte drivers are hardcoded MSB-first — only the *hardware* SPI path respects LSB-first via a repurposed `i2c_bus_clock_100kHz == 254` flag. So we supply our own tiny LSB-first byte callback.
-3. **GP9 is not a valid RP2040 SCK pin.** Hardware SPI is off the table without rewiring, which is why software SPI is used throughout.
+### Why a custom u8g2 fork
 
-The custom byte callback (~15 lines) plus a direct call to `u8g2_Setup_futaba_vfd_gp1287ai_256x50_f` handles all three.
+Three gotchas combined:
 
-## Getting started
+1. **GP1287BI is not in upstream u8g2.** The vendor fork in `lib/U8g2/` adds a GP1287AI driver; AI and BI share a command set, so the AI driver works for the BI.
+2. **LSB-first 8-bit SPI.** u8g2's stock *software* SPI byte drivers are hardcoded MSB-first — only the *hardware* SPI path respects LSB-first. A ~15-line custom byte callback handles it.
+3. **GP9 is not a valid RP2040 SCK pin**, so hardware SPI is off the table without rewiring.
 
-1. Open this folder in VS Code / PlatformIO as its own project.
-2. First build will take a minute while PlatformIO fetches the Pico toolchain.
-3. Upload — put the Pico in BOOTSEL mode the first time (hold the button while plugging in USB).
-4. Serial monitor at 115200 baud if you want to see boot messages.
+### Build & flash
 
-## Dimming
+USB (first time, or recovery):
 
-`setContrast(value)` where value is 0–255. The u8g2 driver internally scales this to the chip's native 10-bit (0–1023) brightness. Default in this template is `128`; raise toward 255 for brighter, drop toward 30 for night use.
+```sh
+pio run -e pico_w -t upload
+```
 
-## Common symptoms
+Over the air, once the device is on the network and running firmware with `ArduinoOTA`:
 
-| Symptom                                   | Likely cause                                                                            |
-| ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| Totally blank, **no filament glow at all**| Carrier not powered, or GND not bonded to Pico                                          |
-| Filament glows but screen stays dark      | Signal issue — check all 5 wires, verify bit order hasn't been changed to MSB           |
-| Garbled / scrambled pixels                | Usually bit order wrong; this template is correct (LSB-first)                           |
-| Display super faint                       | Normal — VFD filament is faint. Look in a darkened room to see it                       |
+```sh
+pio run -e pico_w_ota -t upload
+```
 
-## Library
+The OTA password lives in `src/net.cpp` (`OTA_PASSWORD`) and `platformio.ini` (`--auth=...`); change both to suit.
 
-`lib/U8g2/` is the **custom fork from the carrier vendor**. Do not replace it with the PlatformIO registry version of u8g2 — the upstream release does not contain the GP1287 driver.
+## MQTT interface
+
+The device subscribes to `vfd/input` for plain-text commands. A few highlights:
+
+| Command                       | Effect                                                  |
+| ----------------------------- | ------------------------------------------------------- |
+| `next` / `prev`               | Cycle page                                              |
+| `bright N`                    | Brightness 0..255 (persisted to flash)                  |
+| `lux N`                       | Raw lux from an ambient-light sensor (auto-brightness)  |
+| `display on` / `off` / blank  | Power the screen (presence sensor integration)          |
+| `12h` / `24h`                 | Clock format                                            |
+| `fnext` / `cnext` / `vnext`   | Cycle font / clock face / music visualizer              |
+| `cat <name>`                  | Trigger an action on the tamagotchi page                |
+| `glitch on/off/toggle`        | Dash-glitch overlay                                     |
+
+Publishes:
+
+- **`vfd/state`** — retained JSON snapshot of current state. Republished on any state change and at most every 30 s. Fields include `display`, `brightness`, `page` + `page_name`, `font`, `viz`, `clock_face`, `use_12h`, `ip`, `uptime_s`, and `reason` (what triggered the publish).
+- **`vfd/availability`** — `online` on connect, `offline` via MQTT LWT when the broker loses contact.
+
+Other topics the device listens on: `straybot/playing` (now-playing JSON), `claude/usage` (Claude API budget JSON), `keyboard/knob` (rotary knob events).
+
+![Watch page — time on the left, Claude usage on the right](https://dmello.io/content/images/2026/05/IMG_4614.jpeg)
+
+## Pages I'm fond of
+
+- **Watch** — time on the left in a chunky logisoso22 face, compact Claude readout on the right (5 h + 7 d bars, Sonnet %, extra-usage flag, MQTT freshness). My default work page.
+- **Claude Usage** — full-width bars + a four-cell stats strip (Sonnet, Extra, 5 h pace, Updated) with vertical dividers.
+- **Prusa** — header + thin progress bar + three-column info (time / filament / temps). Falls back to a centred "waiting for print" tooltip after 30 min of idle, persisted across reboots.
+- **Portal** — typewriter scroll with occasional glitch + Aperture Laboratories logo splash on entry.
+- **Tamagotchi** — a little cat lives on a floor, picks weighted random activities, walks to the spot and does the thing.
+
+## Credits
+
+- Custom u8g2 fork from the carrier vendor (EEI).
+- Full project writeup, more photos, and the Mac menu-bar app that pushes Claude usage to MQTT: **<https://dmello.io/building-a-vfd-desk-hud-with-a-pi-pico-w/>**
