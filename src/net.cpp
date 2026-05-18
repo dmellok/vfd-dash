@@ -9,39 +9,39 @@
 #include <time.h>
 
 #include "cache.h"
+#include "secrets.h"
 #include "ui.h"
 
-// ---- Config ------------------------------------------------------------
-static const char* WIFI_SSID = "REDACTED_WIFI_SSID";
-static const char* WIFI_PASS = "REDACTED_WIFI_PASS";
+// ---- Config (secrets live in src/secrets.h — see secrets.example.h) ----
+static const char*    WIFI_SSID = SEC_WIFI_SSID;
+static const char*    WIFI_PASS = SEC_WIFI_PASS;
 
-static const char* MQTT_HOST = "REDACTED_MQTT_HOST";
-static const uint16_t MQTT_PORT = 1883;
-static const char* MQTT_USER = "REDACTED_MQTT_USER";
-static const char* MQTT_PASS = "REDACTED_MQTT_PASS";
-static const char* MQTT_CLIENT_ID = "vfd-dashboard";
-static const char* TOPIC_PLAYING = "straybot/playing";
-static const char* TOPIC_INPUT   = "vfd/input";
-static const char* TOPIC_CLAUDE  = "claude/usage";
-static const char* TOPIC_KNOB    = "keyboard/knob";
-static const char* TOPIC_STATE   = "vfd/state";
-static const char* TOPIC_AVAIL   = "vfd/availability";
+static const char*    MQTT_HOST = SEC_MQTT_HOST;
+static const uint16_t MQTT_PORT = SEC_MQTT_PORT;
+static const char*    MQTT_USER = SEC_MQTT_USER;
+static const char*    MQTT_PASS = SEC_MQTT_PASS;
+static const char*    MQTT_CLIENT_ID = "vfd-dashboard";
+static const char*    TOPIC_PLAYING  = "straybot/playing";
+static const char*    TOPIC_INPUT    = "vfd/input";
+static const char*    TOPIC_CLAUDE   = "claude/usage";
+static const char*    TOPIC_KNOB     = "keyboard/knob";
+static const char*    TOPIC_STATE    = "vfd/state";
+static const char*    TOPIC_AVAIL    = "vfd/availability";
 
-// OTA — must match upload_flags --auth=... in platformio.ini.
-static const char* OTA_HOSTNAME = "vfd-dashboard";
-static const char* OTA_PASSWORD = "REDACTED_OTA_PASS";
+// OTA — must also match upload_flags --auth=... in platformio.ini.
+static const char* OTA_HOSTNAME = SEC_OTA_HOSTNAME;
+static const char* OTA_PASSWORD = SEC_OTA_PASSWORD;
 
 // Melbourne: AEST (UTC+10), AEDT (UTC+11) with DST starting first Sunday of
 // October at 02:00 and ending first Sunday of April at 03:00 local.
 static const char* MELBOURNE_TZ = "AEST-10AEDT,M10.1.0,M4.1.0/3";
 
-// South Morang, Victoria
-static const char* WEATHER_LAT = "-37.64";
-static const char* WEATHER_LON = "145.09";
+static const char* WEATHER_LAT = SEC_WEATHER_LAT;
+static const char* WEATHER_LON = SEC_WEATHER_LON;
 
 // OctoPrint host + API key. Uses mDNS so the Pico must be on the same LAN.
-static const char* OCTO_HOST = "prusa.local";
-static const char* OCTO_KEY  = "REDACTED_OCTO_KEY";
+static const char* OCTO_HOST = SEC_OCTO_HOST;
+static const char* OCTO_KEY  = SEC_OCTO_KEY;
 
 // ---- State -------------------------------------------------------------
 static WiFiClient wifiClient;
