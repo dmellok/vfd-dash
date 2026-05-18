@@ -19,73 +19,16 @@ Full writeup with photos: **[Building a VFD Desk HUD](https://dmello.io/building
 
 ## Pages
 
-> All screenshots are pulled live from the device over the HTTP endpoint and recoloured with the VFD's blue-green glow for legibility on the web. Pixels and layout are 1:1 with the actual display (256×50, upscaled 4×).
+Screenshots are pulled live from the device over the HTTP endpoint and recoloured for the web. Pixels and layout are 1:1 with the real 256×50 panel (upscaled 4×).
 
-### 0 · Overview
-
-![Overview page](docs/screenshots/0-overview.png)
-
-The default dash. Status bar, big clock, current song with progress bar, weather summary on the right, plus a rotating stat slot that cycles through cat weights / visits, Claude 5h-7d budgets, the device's IP, and (when active) the Prusa print progress.
-
-### 1 · Time
-
-![Time page](docs/screenshots/1-time.png)
-
-Full-screen clock with selectable face animations and numeral fonts. Press the knob to cycle through clock faces.
-
-### 2 · Weather
-
-![Weather page](docs/screenshots/2-weather.png)
-
-Big current temp, feels-like, hi/lo, plus a 4-column grid of humidity, cloud cover, sunrise/sunset, wind direction & speed, precipitation, and UV — pulled from Open-Meteo.
-
-### 3 · Now Playing
-
-![Now playing page](docs/screenshots/3-now-playing.png)
-
-Twin-rule head-unit frame around a scrolling track + artist, elapsed/total time, and a configurable audio visualizer driven by the song's progress. Spotify metadata comes in over MQTT.
-
-### 4 · Matrix Rain
-
-![Matrix page](docs/screenshots/4-matrix.png)
-
-Katakana raindrops. Press the knob here and up/down rotate brightness while a progress bar shows the current level. 15-second timeout returns the knob to page-cycling.
-
-### 5 · Cats
-
-![Cats page](docs/screenshots/5-cats.png)
-
-Telemetry for Ada and Tux from a custom cat-scale rig — weight, today's visits, average per day, and last seen.
-
-### 6 · Tamagotchi
-
-![Tamagotchi page](docs/screenshots/6-tamagotchi.png)
-
-A little cat lives on a floor with some furniture, picks weighted-random activities (nap, eat, scratch, play, hairball, chandelier-swinging, …), walks to the right spot, and does the thing.
-
-### 7 · Claude
-
-![Claude usage page](docs/screenshots/7-claude.png)
-
-Bars for the 5-hour and 7-day API budgets with countdown to reset, plus a four-cell stats strip — current Sonnet %, extra-usage flag, hourly burn rate ("5H pace"), and time since the last MQTT push.
-
-### 8 · Portal
-
-![Portal page](docs/screenshots/8-portal.png)
-
-Aperture Laboratories logo splash on entry, then a typewriter scroll of Portal-flavoured log lines with occasional band-shift glitches and pixel noise.
-
-### 9 · Prusa
-
-![Prusa page](docs/screenshots/9-prusa.png)
-
-OctoPrint job + temperatures via REST. Header with state and a live throbber, thin full-width progress bar, then three columns (time / filament / temps) under a divider. Falls back to a centred "waiting for print" tooltip after 30 min of idle, persisted across reboots.
-
-### 10 · Watch
-
-![Watch page](docs/screenshots/10-watch.png)
-
-My default work page — chunky `logisoso22` clock + date on the left, compact Claude usage on the right (5h + 7d bars, Sonnet %, extra-usage flag, countdown to the next reset).
+|  |  |
+| :--- | :--- |
+| ![](docs/screenshots/0-overview.png)<br>**0 · Overview** — clock, song, weather, rotating stats | ![](docs/screenshots/1-time.png)<br>**1 · Time** — full-screen clock with face animations |
+| ![](docs/screenshots/2-weather.png)<br>**2 · Weather** — Open-Meteo grid + sunrise / sunset | ![](docs/screenshots/3-now-playing.png)<br>**3 · Now Playing** — Spotify metadata + audio visualizer |
+| ![](docs/screenshots/4-matrix.png)<br>**4 · Matrix** — Katakana rain; knob doubles as brightness | ![](docs/screenshots/5-cats.png)<br>**5 · Cats** — Ada & Tux scale telemetry |
+| ![](docs/screenshots/6-tamagotchi.png)<br>**6 · Tamagotchi** — procedural cat sim | ![](docs/screenshots/7-claude.png)<br>**7 · Claude** — API budget bars + 4-cell stats strip |
+| ![](docs/screenshots/8-portal.png)<br>**8 · Portal** — Aperture splash + typewriter log | ![](docs/screenshots/9-prusa.png)<br>**9 · Prusa** — OctoPrint job, filament, temps |
+| ![](docs/screenshots/10-watch.png)<br>**10 · Watch** — clock + compact Claude readout |  |
 
 ## Hardware
 
