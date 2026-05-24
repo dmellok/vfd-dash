@@ -23,7 +23,7 @@ Screenshots are pulled live from the device over the HTTP endpoint and recoloure
 
 |  |  |
 | :--- | :--- |
-| ![](docs/screenshots/0-overview.png)<br>**0 · Overview** — clock, song, weather, rotating stats | ![](docs/screenshots/1-time.png)<br>**1 · Time** — full-screen clock with face animations |
+| ![](docs/screenshots/0-overview.png)<br>**0 · Overview** — clock, song, weather, viz / Claude bars (knob-press to toggle) | ![](docs/screenshots/1-time.png)<br>**1 · Time** — full-screen clock with face animations |
 | ![](docs/screenshots/2-weather.png)<br>**2 · Weather** — Open-Meteo grid + sunrise / sunset | ![](docs/screenshots/3-now-playing.png)<br>**3 · Now Playing** — Spotify metadata + audio visualizer |
 | ![](docs/screenshots/4-matrix.png)<br>**4 · Matrix** — Katakana rain; knob doubles as brightness | ![](docs/screenshots/5-cats.png)<br>**5 · Cats** — Ada & Tux scale telemetry |
 | ![](docs/screenshots/6-tamagotchi.png)<br>**6 · Tamagotchi** — procedural cat sim | ![](docs/screenshots/7-claude.png)<br>**7 · Claude** — API budget bars + 4-cell stats strip |
@@ -108,7 +108,18 @@ Publishes:
 - **`vfd/state`** — retained JSON snapshot of current state. Republished on any state change and at most every 30 s. Fields include `display`, `brightness`, `page` + `page_name`, `font`, `viz`, `clock_face`, `use_12h`, `ip`, `uptime_s`, and `reason` (what triggered the publish).
 - **`vfd/availability`** — `online` on connect, `offline` via MQTT LWT when the broker loses contact.
 
-Other topics the device listens on: `straybot/playing` (now-playing JSON), `claude/usage` (Claude API budget JSON), `keyboard/knob` (rotary knob events).
+Other topics the device listens on: `straybot/playing` (now-playing JSON), `claude/usage` (Claude API budget JSON), `keyboard/knob` (rotary knob events — `up` / `down` / `press` / `held`).
+
+### Knob actions
+
+`up` / `down` cycle pages everywhere. `press` and `held` are page-specific:
+
+| Page          | `press` (short)               | `held` (long)        |
+| ------------- | ----------------------------- | -------------------- |
+| 0 Overview    | Cycle right panel (viz ↔ Claude) | Toggle 12h / 24h     |
+| 1 Time        | Next clock face               | —                    |
+| 3 Now Playing | Next music visualizer         | —                    |
+| 4 Matrix      | Enter brightness mode (up/down adjusts brightness for 15s) | — |
 
 ![Watch page — time on the left, Claude usage on the right](https://dmello.io/content/images/2026/05/IMG_4614.jpeg)
 

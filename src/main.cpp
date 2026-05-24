@@ -190,9 +190,9 @@ static void onCommand(const String& raw) {
         // 5 CATS, 6 TAMA, 7 CLAUDE, 8 PORTAL.
         uint8_t pg = uiPageIndex();
         switch (pg) {
-            case 0:                 // OVERVIEW — toggle 12h/24h
-                uiSet12h(!uiIs12h());
-                break;
+            case 0:                 // OVERVIEW — cycle right-side view
+                uiNextDashRight();
+                return;             // ephemeral, no persist
             case 3:                 // NOW PLAYING
                 uiNextViz();
                 break;
@@ -206,6 +206,21 @@ static void onCommand(const String& raw) {
                 return;
             default:
                 return;             // press is a no-op on other pages
+        }
+        persistAll(c.c_str());
+        return;
+    }
+
+    // keyboard/knob: long-press / hold. Same page-dispatch shape as `press`
+    // so each page can have its own hold action.
+    if (c == "held") {
+        uint8_t pg = uiPageIndex();
+        switch (pg) {
+            case 0:                 // OVERVIEW — toggle 12h/24h
+                uiSet12h(!uiIs12h());
+                break;
+            default:
+                return;             // held is a no-op on other pages
         }
         persistAll(c.c_str());
         return;

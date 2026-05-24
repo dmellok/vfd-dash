@@ -162,6 +162,9 @@ static uint8_t s_cfont = 0;       // clock face font index
 static bool    s_use12h = false;
 static bool    s_dashGlitch = false;
 static float   s_matrixBrightP = -1.0f;  // <0 = hidden, else 0..1 fill
+static uint8_t  s_dashRight = 0;          // 0 = viz, 1 = claude bar
+static uint32_t s_dashRightChangedAt = 0;
+constexpr uint8_t kDashRightCount = 2;
 static uint32_t s_pageChangedAt = 0;
 static uint32_t s_fontChangedAt = 0;
 static uint32_t s_vizChangedAt  = 0;
@@ -210,6 +213,12 @@ void uiSet12h(bool on) { s_use12h = on; s_12hChangedAt = millis(); }
 bool uiIs12h() { return s_use12h; }
 void uiSetDashGlitch(bool on) { s_dashGlitch = on; }
 bool uiIsDashGlitch() { return s_dashGlitch; }
+
+void uiNextDashRight() {
+    s_dashRight = (uint8_t)((s_dashRight + 1) % kDashRightCount);
+    s_dashRightChangedAt = millis();
+}
+uint8_t uiDashRightView() { return s_dashRight; }
 
 void uiSetMatrixBrightProgress(float p) {
     if (p < 0.0f) { s_matrixBrightP = -1.0f; return; }
@@ -1006,8 +1015,38 @@ static void renderOverview(VFD& v) {
     //  the status bar.
     const int vizBoxX = 158, vizBoxY = 25, vizBoxW = 98, vizBoxH = 25;
     v.drawFrame(vizBoxX, vizBoxY, vizBoxW, vizBoxH);
-    drawViz(v, vizBoxX + 2, vizBoxY + vizBoxH - 2,
-            vizBoxW - 4, vizBoxH - 4, playing);
+    if (s_dashRight == 1) {
+        // --- Claude usage bar view (knob-press cycles to this) ---------
+        const ClaudeUsage& u = getClaudeUsage();
+        if (!u.valid) {
+            v.setFont(u8g2_font_5x7_tf);
+            const char* msg = "no claude";
+            int mw = v.getStrWidth(msg);
+            v.drawStr(vizBoxX + (vizBoxW - mw) / 2, vizBoxY + 17, msg);
+        } else {
+            auto bar = [&](int rowY, const char* label, int pct) {
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                v.setFont(u8g2_font_5x7_tf);
+                v.drawStr(vizBoxX + 3, rowY + 6, label);
+                const int kBarX = vizBoxX + 18;
+                const int kBarR = vizBoxX + vizBoxW - 24;
+                const int kBarW = kBarR - kBarX;
+                const int kBarH = 5;
+                v.drawFrame(kBarX, rowY + 1, kBarW, kBarH);
+                int fillW = ((kBarW - 2) * pct) / 100;
+                if (fillW > 0) v.drawBox(kBarX + 1, rowY + 2, fillW, kBarH - 2);
+                char p[8]; snprintf(p, sizeof(p), "%d%%", pct);
+                int pw = v.getStrWidth(p);
+                v.drawStr(vizBoxX + vizBoxW - 3 - pw, rowY + 6, p);
+            };
+            bar(vizBoxY + 4,  "5H", u.fiveHourPct);
+            bar(vizBoxY + 15, "7D", u.sevenDayPct);
+        }
+    } else {
+        drawViz(v, vizBoxX + 2, vizBoxY + vizBoxH - 2,
+                vizBoxW - 4, vizBoxH - 4, playing);
+    }
 
     if (haveSong) {
         const int songL = 3;
@@ -3011,6 +3050,11 @@ static void maybeDrawToast(VFD& v) {
         label = buf;
     } else if (s_12hChangedAt && age12 < 900) {
         snprintf(buf, sizeof(buf), "clock: %s", s_use12h ? "12H" : "24H");
+        label = buf;
+    } else if (s_dashRightChangedAt && (millis() - s_dashRightChangedAt) < 900) {
+        static const char* views[] = {"viz", "claude"};
+        snprintf(buf, sizeof(buf), "view: %s",
+                 views[s_dashRight < kDashRightCount ? s_dashRight : 0]);
         label = buf;
     }
     if (!label) return;

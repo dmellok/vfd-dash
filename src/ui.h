@@ -22,6 +22,12 @@ uint8_t uiClockIndex();
 uint8_t uiClockFontIndex();
 const char* uiPageName(uint8_t idx);     // "OVERVIEW", "TIME", …
 
+// Right-hand panel on the dash overview page — cycles between the music
+// visualizer (0) and a Claude usage bar (1). Knob-press on OVERVIEW
+// triggers the cycle.
+void    uiNextDashRight();
+uint8_t uiDashRightView();
+
 void uiSet12h(bool on);
 void uiSetClockFont(uint8_t idx);
 bool uiIs12h();
